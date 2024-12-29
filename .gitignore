@@ -1,0 +1,40 @@
+# Ignore object files
+*.o
+*.obj
+
+# Ignore compiled shared libraries
+*.so
+*.dll
+*.dylib
+
+# Ignore compiled executables
+*.exe
+*.out
+*.app
+
+# Ignore debug and log files
+*.log
+*.pdb
+*.ilk
+
+# Ignore intermediate CUDA files
+*.ptx
+*.cubin
+
+# Ignore build directories
+build/
+Debug/
+Release/
+CMakeFiles/
+
+# Ignore IDE-specific files (if applicable)
+*.vcxproj*
+*.sln
+*.user
+.idea/
+.vscode/
+
+# Ignore temporary files
+*.tmp
+*.swp
+*~
