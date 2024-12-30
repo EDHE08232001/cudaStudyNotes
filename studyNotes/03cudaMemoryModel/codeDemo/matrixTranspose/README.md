@@ -1,4 +1,4 @@
-#**Study Note: CUDA Matrix Transpose Code Explanation**
+# **Study Note: CUDA Matrix Transpose Code Explanation**
 
 #### **Purpose of the Code**
 The code demonstrates two methods for transposing a matrix on a GPU using CUDA:
