@@ -280,6 +280,8 @@ DRAM/DeviceMemory
 --------------------------------
 ```
 
+**Note:** SMEM is Shared Memory
+
 ---
 
 ## **Key Points to Remember**
@@ -298,5 +300,113 @@ DRAM/DeviceMemory
 4. **Programmer Responsibility**:
    - Efficient CUDA programming often involves explicit management of memory types like shared memory.
    - Understanding access patterns (coalescing, reuse) is critical for performance optimization.
+
+-----
+
+# **Memory Types in CUDA**
+
+In CUDA, memory is hierarchically structured to balance speed, capacity, and accessibility. Among the memory types, **local memory** stands out for its unique characteristics despite being located in DRAM.
+
+---
+
+## **Registers**
+- **Fastest memory** in the GPU.
+- Used to store **frequently accessed, thread-private variables**.
+- Can hold arrays if their indices are **constant** or can be determined at **compile time**.
+- Lifetime matches that of the **kernel**, meaning registers are allocated and deallocated as the kernel starts and ends.
+
+### **Register Spilling**
+- **Definition**: Occurs when a kernel uses more registers than the hardware limit.
+- **Behavior**:
+  - Excess variables that cannot fit into registers "spill" into **local memory**.
+  - Local memory resides in **DRAM**, resulting in **higher latency** and **reduced performance**.
+- **Impact**: Register spilling is a key performance bottleneck. Efficient kernel design minimizes register usage to avoid spills.
+
+---
+
+## **Local Memory**
+- Stores **variables that are eligible for registers but cannot fit due to limited register space**.
+- Used for:
+  - **Local arrays** with indices that cannot be resolved at compile time (e.g., dynamically indexed arrays).
+  - **Large local structures** that exceed the register capacity.
+- **Physical Location**:
+  - **Not on-chip**; resides in **DRAM**, resulting in **high-latency memory access**.
+  - Significantly slower than registers or shared memory.
+- **Optimization Tip**: Minimize local memory usage by improving register usage or optimizing memory access patterns.
+
+---
+
+## **Shared Memory**
+- **On-chip memory**, shared by all threads in a block.
+- Partitioned among **thread blocks** running on a Streaming Multiprocessor (SM).
+- Lifetime matches that of a **thread block**.
+- Declared using the **`__shared__`** specifier in CUDA kernels:
+  ```cpp
+  __shared__ int shared_array[128];
+  ```
+- **Key Characteristics**:
+  - **Low latency** and **high bandwidth** compared to DRAM.
+  - Explicitly managed by the programmer to maximize performance.
+- **Shared Memory and L1 Cache**:
+  - Both utilize the **same on-chip memory** in an SM.
+  - Their partitioning is configurable, balancing between cache and shared memory based on the application's needs.
+
+---
+
+## **Other Memory Types in CUDA**
+
+### 1. **Constant Memory**
+- A read-only memory space optimized for broadcast access.
+- Cached on-chip, reducing latency for frequently accessed constants.
+- Ideal for values shared across all threads.
+
+### 2. **Texture Memory**
+- Specialized memory optimized for **spatial locality** and 2D/3D data.
+- Cached and read-only during kernel execution.
+- Ideal for image processing and sampling operations.
+
+### 3. **Global Memory**
+- Main DRAM accessible by all threads on the GPU.
+- Offers large capacity but has **high latency** and requires **coalesced accesses** for optimal performance.
+
+### 4. **GPU Caches**
+- Includes **L1** and **L2** caches for reducing global memory access latency.
+- **L1 Cache**:
+  - Shared with shared memory in an SM.
+  - Provides fast access for frequently used data.
+- **L2 Cache**:
+  - Device-wide cache for global memory.
+  - Buffers data for all SMs.
+
+---
+
+## **Hierarchy Overview**
+
+```
+Fastest---------Speed--------------Slowest
+------------------------------------------>
+Registers - Shared Memory/L1 Cache - Local Memory - Global Memory
+```
+
+### **Comparison**
+| Memory Type        | Location        | Speed       | Scope             | Managed By           |
+|--------------------|-----------------|-------------|-------------------|----------------------|
+| **Registers**      | On-chip         | Fastest     | Per thread        | Hardware             |
+| **Shared Memory**  | On-chip         | Very fast   | Per block         | Programmer           |
+| **Local Memory**   | DRAM            | Slow        | Per thread        | Programmer/Hardware  |
+| **Global Memory**  | DRAM            | Slowest     | All threads       | Programmer           |
+
+---
+
+## **Optimization Tips**
+1. **Reduce Register Pressure**:
+   - Use fewer variables or optimize their scope to avoid spilling into local memory.
+2. **Efficient Shared Memory Usage**:
+   - Use shared memory for inter-thread communication to reduce global memory accesses.
+3. **Access Coalescing**:
+   - Ensure threads access global memory in a coalesced manner to reduce DRAM latency.
+4. **Leverage Constant and Texture Memory**:
+   - Use constant memory for frequently accessed read-only data.
+   - Use texture memory for spatially localized 2D/3D data.
 
 -----
