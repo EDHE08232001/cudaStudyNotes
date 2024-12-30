@@ -1222,3 +1222,22 @@ X1 | X2 | X3 | X4 | ... | Y1 | Y2 | Y3 | Y4 | ...
 By understanding the trade-offs, you can choose the appropriate layout to optimize your CUDA application's performance.
 
 -----
+
+# Matrix Transpose Algorithm
+
+Formula: `out[ix * ny + iy] = in[iy * nx + ix];`
+- ix: x position
+- iy: y position
+- nx: x-axis length
+- ny: y-axis length
+
+Algorithm of Sequential Operation:
+```cpp
+void transpose_mat(float* out, float* int, const int nx, const int ny) {
+    for (int iy = 0; iy < ny; iy++) {
+        for (int ix = 0; ix < nx; ix++) {
+            out[ix * ny + iy] = in[iy * nx + ix];
+        }
+    }
+}
+```
