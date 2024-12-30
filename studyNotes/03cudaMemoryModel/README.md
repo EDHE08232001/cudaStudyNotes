@@ -410,3 +410,130 @@ Registers - Shared Memory/L1 Cache - Local Memory - Global Memory
    - Use texture memory for spatially localized 2D/3D data.
 
 -----
+
+# Memory Management
+
+- To allocate and deallocate memory on host
+    * `malloc`
+    * `free`
+- To allocate, free, and transfer memory on device
+    * `cudaMalloc`
+    * `cudaFree`
+    * `cudaMemCpy`
+
+```
+CPU <---> Main Memory
+| Two-Way
+| Connected
+GPU <---> GPU Memory
+```
+
+-----
+
+# **Pinned Memory in CUDA**
+
+## **Overview**
+- By default, **host memory** allocated in a CUDA application is **pageable memory**, which means:
+  - It can be moved between physical memory and disk by the operating system.
+  - This paging behavior introduces latency and prevents direct access by the GPU.
+- **Pinned memory** (also known as page-locked memory) resolves these issues by ensuring that the memory remains fixed in physical RAM, allowing **direct and efficient data transfer** between the host and the GPU.
+
+---
+
+## **Key Characteristics of Pinned Memory**
+1. **Host Memory Behavior**:
+   - Pageable memory cannot be accessed directly by the GPU.
+   - Data in pageable memory must first be copied to pinned memory before being transferred to the GPU.
+
+2. **Data Flow**:
+   ```text
+   Pageable Memory ---> Pinned Memory ---> Device Memory (DRAM)
+   =================================       ====================
+   These operations are performed on the host       | On the device
+   ```
+
+3. **Advantages of Pinned Memory**:
+   - **Faster Data Transfers**:
+     - Enables **direct memory access (DMA)** between the host and GPU, bypassing intermediate pageable memory copies.
+   - **Reduced Latency**:
+     - Pinned memory is optimized for higher bandwidth during host-device communication.
+   - **Unified Memory**:
+     - Simplifies development by enabling better overlap of computation and memory transfer when used with asynchronous APIs (e.g., `cudaMemcpyAsync`).
+
+4. **Disadvantages**:
+   - **Memory Locking**:
+     - Pinned memory reduces the amount of physical memory available for other processes.
+   - **Limited Usage**:
+     - Excessive allocation of pinned memory can degrade overall system performance.
+
+---
+
+## **CUDA Runtime APIs for Pinned Memory**
+
+### **Allocate Pinned Host Memory**
+The CUDA runtime provides the `cudaMallocHost` function to allocate pinned host memory.
+
+```cpp
+cudaError_t cudaMallocHost(void** devPtr, size_t count);
+```
+
+- **Parameters**:
+  - `devPtr`: Pointer to the allocated pinned memory.
+  - `count`: Size of memory to allocate in bytes.
+
+- **Example**:
+  ```cpp
+  float* hostPinnedMemory;
+  size_t size = 1024 * sizeof(float);
+  cudaMallocHost((void**)&hostPinnedMemory, size);
+  ```
+
+---
+
+### **Free Pinned Host Memory**
+Use the `cudaFreeHost` function to release pinned host memory.
+
+```cpp
+cudaError_t cudaFreeHost(void* ptr);
+```
+
+- **Example**:
+  ```cpp
+  cudaFreeHost(hostPinnedMemory);
+  ```
+
+---
+
+## **Practical Use Case**
+
+Pinned memory is particularly useful in scenarios involving frequent and large data transfers between the host and the GPU, such as:
+1. **Asynchronous Data Transfers**:
+   - Pinned memory enables the use of `cudaMemcpyAsync`, allowing computation and memory transfers to overlap.
+   - Example:
+     ```cpp
+     cudaMemcpyAsync(deviceMemory, hostPinnedMemory, size, cudaMemcpyHostToDevice, stream);
+     ```
+
+2. **High-Performance Applications**:
+   - Applications requiring low-latency, high-throughput memory operations, such as machine learning, image processing, or real-time simulations.
+
+---
+
+## **Comparison: Pageable vs. Pinned Memory**
+
+| Feature                  | Pageable Memory           | Pinned Memory                |
+|--------------------------|---------------------------|------------------------------|
+| **Definition**           | Default host memory       | Page-locked (fixed) host memory |
+| **Access by GPU**        | Indirect                 | Direct                       |
+| **Latency**              | Higher due to intermediate copying | Lower due to DMA          |
+| **Allocation API**       | Standard allocation (`malloc`, `new`) | `cudaMallocHost`          |
+| **Performance**          | Slower for host-device transfers | Faster for host-device transfers |
+
+---
+
+## **Key Takeaways**
+1. **Pinned memory** improves data transfer performance between the host and GPU.
+2. Use pinned memory judiciously to avoid excessive locking of system memory.
+3. Pair pinned memory with **asynchronous memory transfers** for overlapping computation and data movement.
+
+Efficient use of pinned memory is critical for optimizing CUDA applications and achieving high performance in GPU-accelerated workloads.
