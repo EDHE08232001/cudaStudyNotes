@@ -38,3 +38,7 @@ CMakeFiles/
 *.tmp
 *.swp
 *~
+
+# Ignore others
+*.exp
+*.lib
