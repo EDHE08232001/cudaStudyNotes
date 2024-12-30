@@ -1,70 +1,52 @@
 # CUDA Example
 ```cpp
-#include <cstdio>
 #include <iostream>
 
-using namespace std;
+// __global tells the computher to execute the function in gpu
+// and such function are called kernels
+__global__ void add(int* a, int* b, int* c) {
+    /*
+    threadIdx.x: Identifies the position of a thread within its block.
+      - ranges: 0 to blockDim.x - 1
+      - Each thread in a block can have a unique `threadIdx` that is used to differentiate its word from other threads in the same block.
 
-__global__ void maxi(int* a, int* b, int n)
-{
-    int block = 256 * blockIdx.x;
-    int max = 0;
+    bloackDim.x: Defines the total number of threads in a block.
+      - number of threads in a block along the x-dimension
+      - It is constant within a block and specifies how many threads are in each block
 
-    for (int i = block; i < min(256 + block, n); i++) {
-
-        if (max < a[i]) {
-            max = a[i];
-        }
-    }
-    b[blockIdx.x] = max;
+    blockIdx.x: Identifies the position of the block withi the grid.
+      - the index of the block within the grid along the x-dimension
+      - ranges: 0 to the number of blocks in the grid minus one
+      - used to differentiate blocks within a grid
+    */
+    int i = threadIdx.x + blockDim.x * blockIdx.x;
+    c[i] = a[i] + b[i];
 }
 
-int main()
-{
+// __managed__  tells the computher that the variables are
+// accessible from both gpu and cpu
+__managed__ int vector_a[256], vector_b[256], vector_c[256];
 
-    int n;
-    n = 3 >> 2;
-    int a[n];
-
-    for (int i = 0; i < n; i++) {
-        a[i] = rand() % n;
-        cout << a[i] << "\t";
+int main() {
+    for (int i = 0; i < 256; i++) {
+        vector_a[i] = i;
+        vector_b[i] = 256 - i;
     }
 
-    cudaEvent_t start, end;
-    int *ad, *bd;
-    int size = n * sizeof(int);
-    cudaMalloc(&ad, size);
-    cudaMemcpy(ad, a, size, cudaMemcpyHostToDevice);
-    int grids = ceil(n * 1.0f / 256.0f);
-    cudaMalloc(&bd, grids * sizeof(int));
+    add<<<1, 256>>>(vector_a, vector_b, vector_c);
 
-    dim3 grid(grids, 1);
-    dim3 block(1, 1);
+    cudaDeviceSynchronize();
 
-    cudaEventCreate(&start);
-    cudaEventCreate(&end);
-    cudaEventRecord(start);
+    int result_sum = 0;
 
-    while (n > 1) {
-        maxi<<<grids, block>>>(ad, bd, n);
-        n = ceil(n * 1.0f / 256.0f);
-        cudaMemcpy(ad, bd, n * sizeof(int), cudaMemcpyDeviceToDevice);
+    for (int i = 0; i < 256; i++) {
+        result_sum += vector_c[i];
     }
 
-    cudaEventRecord(end);
-    cudaEventSynchronize(end);
+    std::cout << "Hi, Mom! I added vectors on GPU" << std::endl;
+    std::cout << "Result: " << result_sum << std::endl;
 
-    float time = 0;
-    cudaEventElapsedTime(&time, start, end);
-
-    int ans[2];
-    cudaMemcpy(ans, ad, 4, cudaMemcpyDeviceToHost);
-
-    cout << "The maximum element is : " << ans[0] << endl;
-
-    cout << "The time required : ";
-    cout << time << endl;
+    return 0;
 }
 ```
 
