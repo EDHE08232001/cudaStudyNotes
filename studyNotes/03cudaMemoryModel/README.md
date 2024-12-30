@@ -178,3 +178,125 @@ Smallest--------Size---------------Biggest
 
 -----
 
+# **Different Memory Types in CUDA**
+
+CUDA leverages a hierarchical memory model to provide a balance between performance, accessibility, and storage capacity. Each type of memory serves specific purposes and is optimized for certain operations.
+
+---
+
+## **Memory Hierarchy**
+
+### **Streaming Multiprocessor (SM) Memory**
+The memory directly accessible by threads running on Streaming Multiprocessors (SMs). This memory is fast and small, optimized for low-latency, high-bandwidth operations.
+
+1. **Register Files**:
+   - **Definition**: Fastest memory, allocated per thread for local variables.
+   - **Characteristics**:
+     - Private to each thread.
+     - No sharing between threads.
+     - Limited in number (register pressure can limit active threads).
+   - **Use Case**: Store frequently accessed local variables.
+
+2. **Shared Memory (SMEM)**:
+   - **Definition**: A fast memory region shared among all threads in a block.
+   - **Characteristics**:
+     - Low latency and high bandwidth.
+     - Used for inter-thread communication within a block.
+     - Explicitly managed by the programmer.
+   - **Use Case**: Collaborative computation (e.g., matrix multiplication, reduction).
+
+3. **L1 Cache**:
+   - **Definition**: A memory cache local to the SM, providing faster access to frequently used global or local memory.
+   - **Characteristics**:
+     - Transparently managed by the hardware.
+     - Shared by all threads in an SM.
+   - **Use Case**: Frequently accessed data that doesn't fit in registers or shared memory.
+
+4. **Constant Memory**:
+   - **Definition**: A read-only memory space optimized for broadcast access.
+   - **Characteristics**:
+     - Cached on the device (usually in L1).
+     - Best suited for values that are read frequently by many threads.
+   - **Use Case**: Storing constants shared across all threads.
+
+5. **Read-Only Cache**:
+   - **Definition**: A cache for read-only global memory operations.
+   - **Characteristics**:
+     - Optimized for data that doesn't change during kernel execution.
+   - **Use Case**: Read-only data that is accessed multiple times, such as input matrices.
+
+---
+
+### **Device Memory (DRAM)**
+This is the large, high-latency memory shared across the entire device. While slower than SM memory, it provides significant storage capacity.
+
+1. **L2 Cache**:
+   - **Definition**: A larger, device-wide cache that services all SMs.
+   - **Characteristics**:
+     - Sits between DRAM and SMs.
+     - Reduces access latency for global memory.
+   - **Use Case**: Buffering frequently accessed data from global memory.
+
+2. **Global Memory**:
+   - **Definition**: The primary DRAM accessible by all threads.
+   - **Characteristics**:
+     - Large capacity but high latency.
+     - Requires coalesced accesses for efficiency.
+   - **Use Case**: Storing data shared across blocks or the entire grid.
+
+3. **Texture Memory**:
+   - **Definition**: A specialized memory space optimized for 2D spatial locality.
+   - **Characteristics**:
+     - Read-only for kernels.
+     - Provides hardware interpolation and caching for spatial locality.
+   - **Use Case**: Accessing 2D/3D image data.
+
+4. **Constant Memory Cache**:
+   - **Definition**: A small cache for constant memory located in DRAM.
+   - **Characteristics**:
+     - Shared across SMs.
+     - Optimized for broadcast reads.
+   - **Use Case**: Storing data that is constant across all kernels and threads.
+
+---
+
+## **Diagram of CUDA Memory Hierarchy**
+
+```
+Streaming Multiprocessor
+---------------------------------
+        Register Files
+SMEM | L1 | CONSTANT | READ ONLY
+---------------------------------
+
+        INTERACTS WITH
+
+DRAM/DeviceMemory
+--------------------------------
+- L2
+- GLOBAL MEMORY
+- TEXTURE MEMORY
+- CONSTANT MEMORY CACHE
+--------------------------------
+```
+
+---
+
+## **Key Points to Remember**
+
+1. **Fastest Access**:
+   - Registers and shared memory are the fastest but limited in size.
+   - Designed for frequent and local data usage.
+
+2. **Larger Capacity**:
+   - Global memory offers large storage but is slower.
+   - Optimized with coalesced accesses and caching mechanisms.
+
+3. **Read-Only Optimizations**:
+   - Constant memory and texture memory are read-only but have specific caching and performance benefits.
+
+4. **Programmer Responsibility**:
+   - Efficient CUDA programming often involves explicit management of memory types like shared memory.
+   - Understanding access patterns (coalescing, reuse) is critical for performance optimization.
+
+-----
