@@ -876,4 +876,136 @@ int main() {
 2. It is a powerful tool for reducing code complexity and facilitating dynamic workflows.
 3. Developers should balance the ease of use with potential performance trade-offs, optimizing for scenarios where frequent memory migrations can be minimized.
 
+-----
 
+# **Global Memory Access Patterns in CUDA**
+
+Global memory is the primary memory for data exchange in CUDA kernels, but it is slower compared to shared memory or registers. Efficient use of global memory is critical for achieving high performance in CUDA applications.
+
+---
+
+## **Ideal Memory Access Pattern**
+The **ideal memory access pattern** is called **Aligned and Coalesced Access**, which minimizes memory transactions and maximizes bandwidth utilization.
+
+### **Memory Hierarchy**
+```text
+--------------
+    SM
+--------------
+      |
+      | All global memory accesses go through L2 cache.
+      | Some may also go through L1 cache for faster access.
+      |
+--------------
+    Global
+    Memory
+--------------
+```
+
+- **L2 Cache**:
+  - Services memory accesses in **32-byte transactions**.
+  - Always involved in global memory access.
+
+- **L1 Cache (if used)**:
+  - Improves access latency for frequently accessed data.
+  - Services memory accesses in **128-byte transactions**.
+
+---
+
+## **Characteristics of Memory Access**
+
+### **Aligned Memory Access**
+- **Definition**: Occurs when the first memory address accessed is an even multiple of the cache granularity.
+- **Granularity**:
+  - For **L1 and L2 cache**: Granularity is **128 bytes**.
+  - For **L2 cache only**: Granularity is **32 bytes**.
+- **Example**:
+  - Aligned access occurs if:
+    - The starting address for L1 and L2 memory transactions is a multiple of **128**.
+    - The starting address for L2-only memory transactions is a multiple of **32**.
+
+### **Coalesced Memory Access**
+- **Definition**: Occurs when all **32 threads in a warp** access a **continuous chunk of memory**.
+- **Benefits**:
+  - Reduces the number of memory transactions required.
+  - Maximizes bandwidth utilization by accessing contiguous memory locations efficiently.
+
+### **Aligned and Coalesced Access**
+- **Ideal Pattern**:
+  - A warp accesses a **contiguous chunk of memory**, starting at an **aligned address**.
+  - Example: Thread 0 accesses address 0, thread 1 accesses address 4, and so on (assuming 4-byte data types).
+- **Result**:
+  - The memory transactions are minimized, and cache lines are fully utilized.
+
+---
+
+## **Un-Cached Memory Loads**
+
+### **Definition**:
+- Memory loads that do not use the **L1 cache** are referred to as **un-cached loads**.
+
+### **Characteristics**:
+- **Granularity**:
+  - More fine-grained compared to cached memory loads.
+- **Advantages**:
+  - Can lead to better bus utilization for **misaligned** or **un-coalesced** memory access patterns.
+- **Fallback to DRAM**:
+  - If the **L2 cache** is also bypassed or cannot service the request, memory access is handled directly by **DRAM**, leading to higher latency.
+
+### **Note**:
+- While un-cached loads can be useful in specific scenarios, they generally result in **higher latency** compared to cached loads.
+
+---
+
+## **Comparison: L1 and L2 Cache Access**
+| Cache Used          | Transaction Size | Access Speed   | Suitable for                           |
+|---------------------|------------------|----------------|-----------------------------------------|
+| **L2 Only**         | 32 bytes         | Moderate       | Aligned but not coalesced accesses.    |
+| **L1 + L2**         | 128 bytes        | Fast           | Aligned and coalesced accesses.        |
+
+---
+
+## **Optimization Tips**
+1. **Align Memory Accesses**:
+   - Ensure that the starting memory address for a warp is aligned with the cache granularity.
+   - Example:
+     - For 128-byte aligned access (L1 + L2), start at a multiple of **128**.
+     - For 32-byte aligned access (L2 only), start at a multiple of **32**.
+
+2. **Coalesce Memory Accesses**:
+   - Organize data so that each thread in a warp accesses adjacent memory locations.
+
+3. **Avoid Excessive Un-Coalesced Accesses**:
+   - Use shared memory or register-level optimization to reorganize data and reduce un-coalesced memory patterns.
+
+4. **Minimize Un-Cached Loads**:
+   - Prefer cached accesses (L1 or L2) for frequently accessed data.
+
+---
+
+## **Example: Coalesced vs. Un-Coalesced Access**
+### **Coalesced Access**
+```cpp
+// All threads access adjacent elements
+int idx = threadIdx.x + blockIdx.x * blockDim.x;
+device_array[idx] = idx;
+```
+- **Pattern**: Threads in a warp access a contiguous chunk of memory.
+- **Result**: Ideal, aligned and coalesced access.
+
+### **Un-Coalesced Access**
+```cpp
+// Threads access strided elements
+int idx = (threadIdx.x + blockIdx.x * blockDim.x) * stride;
+device_array[idx] = idx;
+```
+- **Pattern**: Threads in a warp access memory with gaps (strides).
+- **Result**: Increased memory transactions and reduced performance.
+
+---
+
+## **Key Takeaways**
+1. **Aligned and Coalesced Access** is the ideal memory access pattern in CUDA, maximizing performance by reducing memory transactions.
+2. Efficient use of **L1 and L2 caches** improves access latency.
+3. Misaligned or un-coalesced accesses lead to higher latency and reduced bandwidth utilization, often requiring fallback to DRAM.
+4. Optimize memory layouts and access patterns to fully utilize the CUDA memory hierarchy and maximize application performance.
