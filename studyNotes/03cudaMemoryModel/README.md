@@ -537,3 +537,160 @@ Pinned memory is particularly useful in scenarios involving frequent and large d
 3. Pair pinned memory with **asynchronous memory transfers** for overlapping computation and data movement.
 
 Efficient use of pinned memory is critical for optimizing CUDA applications and achieving high performance in GPU-accelerated workloads.
+
+---
+
+## For testing purpose
+
+you can use
+
+```
+nvprof --print-gpu-trace <executable>.exe
+```
+
+after compiling
+
+---
+
+## Pinned Memory is not available to host operating system's virtual memory
+
+-----
+
+# **Zero-Copy Memory in CUDA**
+
+## **Definition**
+Zero-copy memory is a type of **pinned memory** that is mapped into the device’s address space. This mapping allows both the **host** and the **device** to directly access the same memory location, eliminating the need for explicit memory transfers between the two.
+
+---
+
+## **Advantages of Zero-Copy Memory**
+1. **Leveraging Host Memory**:
+   - Allows the GPU to access host memory when the device memory is insufficient, effectively extending the available memory for the device.
+
+2. **Avoiding Explicit Data Transfers**:
+   - Reduces the complexity and overhead of managing separate memory spaces for the host and device.
+
+3. **Improving PCIe Transfer Rates**:
+   - Data transfer rates over the PCIe bus are optimized as zero-copy memory eliminates unnecessary intermediate operations.
+
+---
+
+## **API and Workflow**
+
+### **Allocate Zero-Copy Memory**
+Use `cudaHostAlloc` to allocate pinned memory mapped into the device's address space.
+
+```cpp
+cudaError_t cudaHostAlloc(void** pHost, size_t size, unsigned int flags);
+```
+
+- **Parameters**:
+  - `pHost`: Pointer to the allocated host memory.
+  - `size`: Size of the memory allocation in bytes.
+  - `flags`: Specifies the behavior of the allocated memory (see options below).
+
+- **Free Zero-Copy Memory**:
+  Use `cudaFreeHost` to release the allocated memory:
+  ```cpp
+  cudaError_t cudaFreeHost(void* pHost);
+  ```
+
+---
+
+## **Flag Options for `cudaHostAlloc`**
+
+1. **`cudaHostAllocDefault`**:
+   - Default behavior, same as standard pinned memory.
+
+2. **`cudaHostAllocPortable`**:
+   - Memory is portable across all CUDA contexts, enabling interoperability in multi-context environments.
+
+3. **`cudaHostAllocWriteCombined`**:
+   - Optimized for host writes and device reads.
+   - Not cached on the CPU, which may slow down host reads but improves write performance.
+
+4. **`cudaHostAllocMapped`**:
+   - Maps the allocated memory into the device's address space, enabling zero-copy access by the GPU.
+
+---
+
+### **Obtain Device Pointer for Mapped Memory**
+
+To access zero-copy memory from the device, use the `cudaHostGetDevicePointer` function:
+
+```cpp
+cudaError_t cudaHostGetDevicePointer(void** pDevice, void* pHost, unsigned int flags);
+```
+
+- **Parameters**:
+  - `pDevice`: Device pointer mapped to the pinned host memory.
+  - `pHost`: Host pointer to the pinned memory.
+  - `flags`: Reserved for future use (set to `0` for now).
+
+**Important**: This function will fail if the device does not support **mapped pinned memory**.
+
+---
+
+## **Key Considerations**
+1. **Hardware Support**:
+   - Not all GPUs support zero-copy memory. Check the device capability before using it.
+
+2. **Performance Trade-offs**:
+   - **Latency**: Accessing zero-copy memory is slower than accessing device memory because data still travels over the PCIe bus.
+   - **Best Use Case**: Suitable for infrequent or small memory accesses where device memory is insufficient or explicit memory transfers are impractical.
+
+3. **Memory Management**:
+   - Allocated zero-copy memory consumes host memory and locks it, reducing the available system memory for other processes.
+
+---
+
+## **Use Cases**
+1. **Device Memory Constraints**:
+   - When the GPU has insufficient memory to store the entire dataset, zero-copy memory enables direct access to host memory.
+
+2. **Asynchronous Operations**:
+   - Zero-copy memory allows overlapping data access and kernel execution for improved performance in specific scenarios.
+
+3. **Data Sharing Across CUDA Contexts**:
+   - Use the `cudaHostAllocPortable` flag to create pinned memory accessible in multiple CUDA contexts.
+
+---
+
+## **Example Workflow**
+
+### **Allocating and Accessing Zero-Copy Memory**
+
+```cpp
+#include <cuda_runtime.h>
+#include <iostream>
+
+int main() {
+    float *hostPtr, *devicePtr;
+    size_t size = 1024 * sizeof(float);
+
+    // Allocate zero-copy memory on the host
+    cudaHostAlloc(&hostPtr, size, cudaHostAllocMapped);
+
+    // Obtain the device pointer for the zero-copy memory
+    cudaHostGetDevicePointer(&devicePtr, hostPtr, 0);
+
+    // Use the device pointer in a kernel
+    kernel<<<1, 256>>>(devicePtr);
+
+    // Free the pinned host memory
+    cudaFreeHost(hostPtr);
+
+    return 0;
+}
+```
+
+---
+
+## **Key Takeaways**
+1. Zero-copy memory is an efficient solution when:
+   - Device memory is insufficient.
+   - Minimizing explicit data transfer overhead.
+2. It provides seamless access to host memory from the device, leveraging pinned memory mapped to the device address space.
+3. Zero-copy memory is best for **low-bandwidth, infrequent accesses**, or when direct memory sharing is required. Overuse in high-throughput scenarios can lead to performance degradation due to PCIe latency. 
+
+Efficient use of zero-copy memory can significantly simplify host-device memory management and optimize CUDA application performance in specific use cases.
