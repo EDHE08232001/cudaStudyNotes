@@ -819,6 +819,7 @@ __shfl_x(mask, variable, source_lane_id, width);
   - The variable to be exchanged.
 - **`source_lane_id`**:
   - The source thread's lane ID (0–31) from which data is read.
+  - `laneID = threadIdx.x % 32`
 - **`width`**:
   - The number of threads participating in the shuffle operation.
   - Default width for a warp is `32`.
