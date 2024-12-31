@@ -377,3 +377,9 @@ __shared__ int smem[32][33];  // Add 1 column of padding
 3. **Use Padding**: Add padding to disrupt conflict-prone access patterns in column-major layouts.
 
 -----
+
+# Static and Dynamic Shared Memory
+
+Use `index = threadIdx.y * blockDim.x + threadIdx.x` to access in row major format.
+
+See staticDynamicDemo.cu
