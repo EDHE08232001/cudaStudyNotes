@@ -124,3 +124,149 @@ __global__ void smem_dynamic_test(int* in, int* out, int size) {
    Use dynamic shared memory only when static allocation is insufficient or when sizes vary across kernel launches.
 
 -----
+
+# **Shared Memory Banks and Access Modes**
+
+In CUDA, shared memory is divided into **banks** to allow parallel access by threads in a warp. Efficient utilization of shared memory depends on understanding how these banks function and avoiding conflicts that can degrade performance.
+
+---
+
+## **Shared Memory Banks**
+
+Shared memory is divided into **32 equally sized memory modules**, called **banks**, which can be accessed simultaneously. Each bank serves one 32-bit or 64-bit word per cycle, depending on the GPU's compute capability.
+
+### **Bank Layout and Word Indices**
+- Banks are sequentially indexed from **0 to 31**.  
+- Each bank contains a series of memory words. A **word** is a fixed-size data unit (e.g., 4 bytes for 32-bit words or 8 bytes for 64-bit words).  
+
+#### **Example Layout: 32-bit Banks**
+```
+Bank Index:         0 ----- 31
+=================================
+4-Byte Word Index:  0 ----- 31
+                    32 ---- 63
+                    64 ---- 95
+                    96 ---- 127
+```
+
+### **Relationship Between Banks and Warps**
+Since there are **32 threads per warp**, each thread in a warp can access one bank simultaneously without conflict if the memory access pattern is properly aligned.
+
+---
+
+## **Bank Conflicts**
+
+A **bank conflict** occurs when multiple threads in a warp attempt to access **different words within the same bank** in a single transaction. When this happens:
+- The memory request is split into multiple **conflict-free transactions**.
+- The number of transactions equals the degree of the conflict (i.e., how many threads access the same bank).  
+- This reduces effective bandwidth and slows down kernel execution.
+
+---
+
+### **Common Access Scenarios in Shared Memory**
+
+1. **Ideal Case: Parallel Access**
+   - If all threads access **different banks**, the access occurs in a single transaction.  
+   - This is the optimal pattern for shared memory usage, ensuring maximum bandwidth utilization.
+
+2. **Sequential Access**
+   - Threads access **different memory addresses** within the **same bank**.  
+   - The memory accesses are serialized, degrading performance due to conflicts.
+
+3. **Broadcast Access**
+   - All threads access the **same memory address** within a single bank.  
+   - The transaction is serialized but only one word is actually read. This leads to poor bandwidth utilization as many threads effectively do no useful work.
+
+---
+
+## **Shared Memory Bank Width and Access Modes**
+
+The width of each bank determines how data is mapped to banks and accessed by threads.  
+
+### **Bank Width Evolution**
+- **Compute Capability 2.x GPUs**: 32-bit banks (4 bytes per word).  
+- **Compute Capability 3.x and later GPUs**: 64-bit banks (8 bytes per word).  
+
+### **Shared Memory Access Modes**
+CUDA supports two primary access modes for shared memory:
+1. **32-bit Access Mode:** Each thread accesses a 4-byte word.  
+2. **64-bit Access Mode:** Each thread accesses an 8-byte word.  
+
+---
+
+## **Calculating Bank Index**
+
+The **bank index** determines which bank a specific memory address is mapped to. For devices with 32-bit banks:
+```plaintext
+bank_index = (byte_address / (4 bytes per word)) % 32
+```
+
+---
+
+## **Examples**
+
+### **Example 1: Fermi Devices (32-bit Bank Width)**
+
+On devices with 32-bit banks, successive 4-byte memory words are mapped to successive banks:
+
+#### Layout:
+```
+Byte Address:          0 | 4 | 8 | 12 | ---- | 60 | .......
+4-Byte Word Index:     0 | 1 | 2 | 3  | ---- | 15 | .......
+Bank Index:            0 | 1 | 2 | 3  | ---- | 31 | .......
+```
+
+#### Memory Mapping:
+```
+Bank Index:         0 ----- 31
+=================================
+4-Byte Word Index:  0 ----- 31
+                    32 ---- 63
+                    64 ---- 95
+                    96 ---- 127
+```
+
+---
+
+### **Example 2: 64-bit Bank Width, 32-bit Access Mode**
+
+On devices with 64-bit banks, successive **4-byte memory words** are mapped to **successive banks**. Each bank serves two 4-byte words:
+
+#### Layout:
+```
+|  B1  |  B2  |  B3  |  B4  |  B5  | .............  |  B31  |
+| 0,32 | 1,33 | 2,34 | 3,35 | 4,36 | .............  | 31,63 |
+```
+
+---
+
+### **Example 3: 64-bit Bank Width, 64-bit Access Mode**
+
+For 64-bit access, successive **8-byte memory words** are mapped to successive banks. Each bank serves one 8-byte word:
+
+#### Layout:
+```
+|  B1  |  B2  |  B3  |  B4  |  B5  | .............  |  B31  |
+| 0,2  | 3,4  | 5,6  | 7,8  | 9,10 | .............  | 62,63 |
+```
+
+---
+
+## **Best Practices for Avoiding Bank Conflicts**
+
+1. **Align Access Patterns**  
+   Ensure threads in a warp access sequential addresses to map to different banks. This avoids conflicts and maximizes bandwidth.
+
+2. **Pad Shared Memory Arrays**  
+   Add padding to shared memory arrays to disrupt conflict-prone patterns. For example:
+   ```c
+   __shared__ int smem[32 + 1];  // Extra padding avoids conflicts
+   ```
+
+3. **Minimize Shared Memory Accesses**  
+   Use shared memory judiciously and combine it with registers for frequently accessed data.
+
+4. **Understand Device Architecture**  
+   Be aware of the GPU's compute capability and adjust shared memory access modes accordingly.
+
+-----
