@@ -81,6 +81,7 @@ __global__ void smem_dynamic_test(int* in, int* out, int size) {
     int gid = blockIdx.x * blockDim.x + threadIdx.x; // Global thread index
 
     // Declare dynamically allocated shared memory
+    // or this can be a pointer like: `extern __shared__ int* smem;`
     extern __shared__ int smem[];
 
     // Check boundary conditions
@@ -97,9 +98,11 @@ __global__ void smem_dynamic_test(int* in, int* out, int size) {
 1. **Static Shared Memory**:  
    - Size is fixed at compile time and specified in the kernel code.  
    - Best for predictable, small-sized allocations.
+   - Launch: `smem_static_test<<<grid, block>>>(d_in, d_out, size);`
 
 2. **Dynamic Shared Memory**:  
-   - Size is specified during kernel launch using the third kernel parameter (e.g., `<<<blocks, threads, shared_mem_size>>>`).  
+   - Size is specified during kernel launch using the third kernel parameter (e.g., `<<<blocks, threads, shared_mem_size>>>`).
+        * `smem_dynamic_test<<<grid, block, sizeof(int) * SHARED_MEMORY_SIZE>>>(d_in, d_out, size);`
    - Useful for variable or larger memory requirements.
 
 ---
