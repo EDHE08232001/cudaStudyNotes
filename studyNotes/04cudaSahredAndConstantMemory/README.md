@@ -638,3 +638,133 @@ The transposed data is written back to the **output array** in row-major format:
   - Reading data into shared memory.
   - Accessing shared memory with transposed indices.
   - Writing the transposed result to the global memory.
+
+-----
+
+# **Constant Memory in CUDA**
+
+Constant memory is a **special-purpose memory** in CUDA that is:
+- **Read-only** from the device (kernels).
+- **Readable and writable** from the host (CPU).
+
+It is designed for **read-only data** that is accessed uniformly by threads within a warp, offering performance benefits in specific scenarios.
+
+---
+
+## **Key Characteristics of Constant Memory**
+
+1. **Uniform Access**:
+   - Best suited for data that is accessed **uniformly by all threads in a warp** (e.g., a common coefficient or lookup table).
+   - When all threads in a warp access the **same memory location**, the access is optimized and broadcasted to all threads in a single transaction.
+
+2. **Serialized Access**:
+   - If threads within a warp access **different addresses** in constant memory, the accesses are serialized, leading to reduced performance.
+
+3. **Lifetime and Accessibility**:
+   - **Lifetime**: Constant memory variables exist for the duration of the application.
+   - **Accessibility**: Accessible from:
+     - All threads in a grid.
+     - The host (CPU) via CUDA runtime functions.
+
+4. **Initialization**:
+   - Constant memory can only be **read** from the device.
+   - Values must be **initialized from the host** using runtime functions like `cudaMemcpyToSymbol`.
+
+---
+
+## **Declaring and Using Constant Memory**
+
+### **Declaration**
+- Use the `__constant__` keyword to declare constant memory in global scope:
+  ```c
+  __constant__ float coefficients[256];
+  ```
+
+### **Copying Data from Host to Device**
+- Use `cudaMemcpyToSymbol` to copy data to constant memory:
+  ```c
+  cudaMemcpyToSymbol(
+      coefficients,    // Symbol (constant memory variable)
+      host_data,       // Source data on host
+      sizeof(float) * 256, // Size of data to copy
+      0,               // Offset in constant memory (optional)
+      cudaMemcpyHostToDevice // Direction of memory copy
+  );
+  ```
+
+### **Accessing Constant Memory in Kernel**
+- Constant memory can be directly accessed within the kernel using its name:
+  ```c
+  __global__ void computeKernel(const float* input, float* output, int size) {
+      int idx = threadIdx.x + blockIdx.x * blockDim.x;
+      if (idx < size) {
+          output[idx] = input[idx] * coefficients[0]; // Access constant memory
+      }
+  }
+  ```
+
+---
+
+## **Performance Tips**
+
+1. **Uniform Access**:
+   - Ensure all threads in a warp access the **same address** in constant memory to maximize performance.
+
+2. **Data Size**:
+   - Constant memory is limited to **64 KB** for most devices.
+   - Use it for small, read-only datasets that are frequently accessed.
+
+3. **Initialization from Host**:
+   - Always initialize constant memory values from the host before launching kernels.
+
+---
+
+## **Application: Stencil Computations**
+
+### **What are Stencil Computations?**
+- Stencil computations involve applying a **function** to a group of **geometric points** (e.g., a neighborhood in a grid) and updating the value of a single point based on the results.
+- Examples include:
+  - Heat diffusion simulation.
+  - Image processing filters (e.g., Gaussian blur).
+  - Finite difference methods for solving PDEs.
+
+### **Constant Memory Usage in Stencil Computations**
+- Constant memory is ideal for storing **stencil coefficients** (e.g., weights in a kernel):
+  ```c
+  __constant__ float stencil[5]; // Stencil coefficients
+
+  __global__ void stencilKernel(const float* input, float* output, int width) {
+      int idx = threadIdx.x + blockIdx.x * blockDim.x;
+      if (idx >= 2 && idx < width - 2) { // Avoid boundary issues
+          output[idx] = stencil[0] * input[idx - 2] +
+                        stencil[1] * input[idx - 1] +
+                        stencil[2] * input[idx] +
+                        stencil[3] * input[idx + 1] +
+                        stencil[4] * input[idx + 2];
+      }
+  }
+  ```
+
+### **Advantages**:
+- Stencil coefficients are **read-only** and shared across all threads, making them a perfect fit for constant memory.
+- Reduces the need for repetitive global memory reads, improving performance.
+
+---
+
+## **Summary**
+
+### **Why Use Constant Memory?**
+- Ideal for small, read-only datasets shared across threads.
+- Maximizes performance when accessed uniformly by threads in a warp.
+
+### **When to Use Constant Memory?**
+- Frequently accessed, read-only data such as:
+  - Coefficients in stencil computations.
+  - Lookup tables.
+  - Fixed constants for computations.
+
+### **Limitations**
+- Limited to **64 KB** in size.
+- Access performance drops if threads in a warp access **different addresses**.
+
+![stencil computations](./images/stencilComp.png)
