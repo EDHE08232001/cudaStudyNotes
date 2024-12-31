@@ -380,6 +380,13 @@ __shared__ int smem[32][33];  // Add 1 column of padding
 
 # Static and Dynamic Shared Memory
 
-Use `index = threadIdx.y * blockDim.x + threadIdx.x` to access in row major format.
+Use:
+- `row_index = threadIdx.y * blockDim.x + threadIdx.x` 
+- `col_index = threadIdx.x * blockDim.y + threadIdx.y`
 
-See staticDynamicDemo.cu
+See `dynamicRowMajorDemo.cu`
+
+-----
+
+# Shared Memory Padding
+
