@@ -393,3 +393,143 @@ See `dynamicRowMajorDemo.cu`
 ![smem padding](./images/smemPadding.png)
 
 For code see `smemPaddingDemo.cu`
+
+-----
+
+# **CUDA Synchronization Mechanism**
+
+CUDA uses a **weakly ordered memory model**, which means the order in which a thread writes data to shared, global, or other memory spaces may not be observed in the same order by other threads. This characteristic enables high performance but can lead to inconsistencies if not properly managed.
+
+---
+
+## **Memory Ordering in CUDA**
+
+### **Weakly Ordered Model**
+- The order of operations performed by one thread **may not be visible** to other threads in the same order.
+- Example:
+  - A thread writes `x = 10` followed by `y = 20`.
+  - Another thread reading `x` and `y` may see:
+    - `x = 1, y = 2` (initial values).
+    - `x = 10, y = 2`.
+    - `x = 10, y = 20`.
+    - OR even `x = 1, y = 20` (since there's no guaranteed ordering).
+
+### **Strongly Ordered Model**
+In a strongly ordered model, threads always observe memory operations in the order they were performed. CUDA does not natively enforce this, but you can introduce **memory fences** to impose ordering constraints.
+
+---
+
+## **Example Code**
+
+```cpp
+__device__ volatile int x = 1, y = 2;
+
+// Writing values to x and y
+__device__ void writeXY() {
+   x = 10;  // First write
+   y = 20;  // Second write
+}
+
+// Reading values from x and y
+__device__ void readXY() {
+   int p = x;  // Read x
+   int q = y;  // Read y
+}
+```
+
+In the example:
+- Without synchronization, thread B may see the writes to `x` and `y` in **any order**, due to the weakly ordered memory model.
+
+---
+
+## **Memory Fence Functions**
+
+CUDA provides **memory fence functions** to enforce memory ordering:
+
+### **1. `__threadfence_block()`**
+- Scope: **Thread block**.
+- Ensures:
+  - **All writes** to memory made by a thread before this function call are observed by other threads in the same block **before any writes** after this function call.
+  - **All reads** made before this function call are ordered before **all reads** made after this function call.
+- Use case: Synchronize memory access within the same block.
+
+#### **Example**
+```cpp
+__global__ void threadFenceBlockExample() {
+    __shared__ int sharedVar;
+    
+    // Thread 0 writes to shared memory
+    if (threadIdx.x == 0) {
+        sharedVar = 42;
+        __threadfence_block(); // Ensure the write is visible to all threads in the block
+    }
+
+    // Other threads read sharedVar
+    __syncthreads(); // Synchronize all threads in the block
+    int value = sharedVar; // Guaranteed to see 42 after __threadfence_block()
+}
+```
+
+---
+
+### **2. `__threadfence()`**
+- Scope: **Device**.
+- Ensures:
+  - Same guarantees as `__threadfence_block()`, but across the entire device.
+  - Useful when threads in different blocks need to observe memory operations in a specific order.
+
+#### **Example**
+```cpp
+__global__ void threadFenceDeviceExample(int* globalVar) {
+    if (threadIdx.x == 0) {
+        *globalVar = 42;       // Write to global memory
+        __threadfence();       // Ensure visibility across the device
+    }
+
+    // Other threads or blocks can now safely read *globalVar
+}
+```
+
+---
+
+## **Key Concepts**
+
+### **1. Memory Coherence**
+- Without synchronization, different threads may observe memory updates in **different orders**.
+- Memory fences ensure **memory coherence** within the specified scope.
+
+### **2. Synchronization vs. Memory Fence**
+- **Thread synchronization (`__syncthreads()`)**: Ensures all threads in a block reach the same point before proceeding.
+- **Memory fence (`__threadfence_block()` or `__threadfence()`)**: Ensures ordering of memory operations before and after the fence call.
+
+---
+
+## **Comparison of Memory Fence Functions**
+
+| Function             | Scope           | Use Case                          |
+|----------------------|-----------------|-----------------------------------|
+| `__threadfence_block()` | Thread block    | Synchronize memory writes within a thread block. |
+| `__threadfence()`       | Device          | Ensure memory writes are visible to all threads across the device. |
+
+---
+
+## **Best Practices**
+
+1. **Use Synchronization Wisely**:
+   - Overuse of memory fences can degrade performance.
+   - Use them only when absolutely necessary to maintain memory consistency.
+
+2. **Combine with `__syncthreads()`**:
+   - Memory fences ensure **ordering**, while `__syncthreads()` ensures all threads reach a consistent point in execution.
+
+3. **Scope Matters**:
+   - Use `__threadfence_block()` for intra-block consistency.
+   - Use `__threadfence()` for inter-block consistency.
+
+---
+
+## **Summary**
+
+- CUDA uses a **weakly ordered memory model** for performance reasons.
+- **Memory fences** like `__threadfence_block()` and `__threadfence()` allow you to enforce memory ordering.
+- Proper use of synchronization mechanisms is crucial for ensuring correctness in parallel programs while avoiding unnecessary performance overhead.
