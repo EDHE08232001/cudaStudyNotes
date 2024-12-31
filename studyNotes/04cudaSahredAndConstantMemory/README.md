@@ -533,3 +533,108 @@ __global__ void threadFenceDeviceExample(int* globalVar) {
 - CUDA uses a **weakly ordered memory model** for performance reasons.
 - **Memory fences** like `__threadfence_block()` and `__threadfence()` allow you to enforce memory ordering.
 - Proper use of synchronization mechanisms is crucial for ensuring correctness in parallel programs while avoiding unnecessary performance overhead.
+
+-----
+
+# **Matrix Transpose with Shared Memory**
+
+Matrix transpose involves swapping rows and columns. In CUDA, **shared memory** optimizes this process by reducing global memory accesses and improving memory access patterns.
+
+---
+
+## **Assumption**
+- The **matrix** and **thread block dimensions** are non-equal.
+- Shared memory is used as a staging area to store tiles of the input matrix for optimized memory access during the transpose operation.
+
+---
+
+## **Memory Access Patterns**
+
+### **1. Access Input Array in Row-Major Format**
+Each thread accesses an element from the **input matrix** stored in row-major order:
+- **Index calculations:**
+  - Global indices for the thread:
+    ```cpp
+    ix = blockIdx.x * blockDim.x + threadIdx.x; // Global column index
+    iy = blockIdx.y * blockDim.y + threadIdx.y; // Global row index
+    ```
+  - Linear index for input array:
+    ```cpp
+    in_index = iy * nx + ix; // Row-major indexing
+    ```
+
+---
+
+### **2. Store Data to Shared Memory in Row-Major Format**
+The element read from the input matrix is stored in **shared memory** in row-major format:
+- **Index calculation:**
+  - Use thread indices to determine shared memory tile coordinates:
+    ```cpp
+    tile[threadIdx.y][threadIdx.x] = input[in_index];
+    ```
+
+- **Purpose**:
+  - Staging data in shared memory allows threads to later access it efficiently in column-major order for the transposed matrix.
+
+---
+
+### **3. Load Data from Shared Memory in Column-Major Format**
+To transpose the matrix, threads load data from the **shared memory** in column-major order:
+- **Index calculations:**
+  - Calculate a **1D thread index** in the tile:
+    ```cpp
+    1d_index = threadIdx.y * blockDim.x + threadIdx.x;
+    ```
+  - Derive the **row** and **column** indices for column-major access:
+    ```cpp
+    i_row = 1d_index / blockDim.y; // Row index in transposed view
+    i_col = 1d_index % blockDim.y; // Column index in transposed view
+    ```
+  - Access shared memory:
+    ```cpp
+    value = tile[i_col][i_row];
+    ```
+
+---
+
+### **4. Store Data to Output Array in Row-Major Format**
+The transposed data is written back to the **output array** in row-major format:
+- **Index calculations:**
+  - Calculate the transposed global indices:
+    ```cpp
+    out_ix = blockIdx.y * blockDim.y + i_col; // Transposed column index
+    out_iy = blockIdx.x * blockDim.x + i_row; // Transposed row index
+    ```
+  - Linear index for the output array:
+    ```cpp
+    out_index = out_iy * ny + out_ix;
+    ```
+  - Write to the output array:
+    ```cpp
+    output[out_index] = value;
+    ```
+
+---
+
+## **Flow Diagram**
+
+1. **Input Matrix (Row-Major Format)**
+   - Data is read using global indices and stored in shared memory.
+
+2. **Shared Memory (Row-Major Format)**
+   - Acts as a staging area, allowing efficient access patterns.
+
+3. **Shared Memory (Column-Major Format)**
+   - Data is read from shared memory in a column-major pattern to achieve the transpose.
+
+4. **Output Matrix (Row-Major Format)**
+   - Transposed data is written back to the output matrix in row-major order.
+
+---
+
+## **Summary**
+- Efficient indexing and shared memory usage allow for reduced global memory operations and improved performance.
+- The key operations involve:
+  - Reading data into shared memory.
+  - Accessing shared memory with transposed indices.
+  - Writing the transposed result to the global memory.
