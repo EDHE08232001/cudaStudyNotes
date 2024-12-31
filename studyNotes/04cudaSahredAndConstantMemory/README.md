@@ -390,3 +390,6 @@ See `dynamicRowMajorDemo.cu`
 
 # Shared Memory Padding
 
+![smem padding](./images/smemPadding.png)
+
+For code see `smemPaddingDemo.cu`

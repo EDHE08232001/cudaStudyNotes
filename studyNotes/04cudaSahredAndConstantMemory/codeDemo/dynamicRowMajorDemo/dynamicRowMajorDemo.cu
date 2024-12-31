@@ -24,7 +24,7 @@ __global__ void setRowReadColDynamic(int* out) {
     int row_index = threadIdx.y * blockDim.x + threadIdx.x;
 
     // Calculate column-major index for the thread
-    int col_index = threadIdx.x * blockDim.y + threadIdx.y;
+    int col_index = threadIdx.x * blockDim.x + threadIdx.y;
 
     // Write to shared memory in row-major format
     tile[row_index] = row_index;
