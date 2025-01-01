@@ -265,3 +265,8 @@ By overlapping these operations, the GPU can process tasks more efficiently, lea
    - Execute independent kernels simultaneously to utilize the GPU better.
 3. **Heterogeneous Workloads**:
    - Overlap memory-bound and compute-bound tasks using streams.
+
+-----
+
+# Overlapping Memory Transfer and Kernel Execution
+
