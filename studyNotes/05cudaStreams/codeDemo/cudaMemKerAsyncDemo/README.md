@@ -251,3 +251,88 @@ for (int i = 0; i < NUM_STREAMS; i++) {
 - **Partitioning:** Simplifies dividing the workload among multiple streams.
 - **Scalability:** Easy to adjust for larger arrays or more streams.
 - **Concurrent Execution:** Enables multiple streams to work on separate chunks concurrently.
+
+---
+## How this Copy Work?
+
+```cpp
+cudaMemcpyAsync(&d_a[offset], &h_a[offset], BYTES_PER_STREAM, cudaMemcpyHostToDevice, streams[i]);
+```
+
+every `ELEMENTS_PER_STREAM` elements in `h_a` are being copied into `d_a` for the current stream `streams[i]`.
+
+### **How Does It Work?**
+- **Source Pointer (`&h_a[offset]`):**
+  - Specifies the starting address in the host array `h_a` from which data will be copied. The `offset` ensures that each stream begins copying from the correct portion of the array.
+  
+- **Destination Pointer (`&d_a[offset]`):**
+  - Specifies the starting address in the device array `d_a` where the data will be copied.
+
+- **Bytes to Copy (`BYTES_PER_STREAM`):**
+  - Represents the number of bytes to transfer. It is calculated as:
+    ```cpp
+    BYTES_PER_STREAM = ELEMENTS_PER_STREAM * sizeof(int);
+    ```
+    This ensures that exactly `ELEMENTS_PER_STREAM` elements are transferred.
+
+- **Stream (`streams[i]`):**
+  - Assigns the memory transfer to the stream `streams[i]`, allowing the operation to overlap with other streams' activities.
+
+---
+
+### **Breakdown of the Transfer**
+
+#### Example Scenario:
+- Assume:
+  - `size = 16` (16 elements in total).
+  - `NUM_STREAMS = 4` (4 streams).
+  - `ELEMENTS_PER_STREAM = size / NUM_STREAMS = 4`.
+  - `BYTES_PER_STREAM = ELEMENTS_PER_STREAM * sizeof(int) = 4 * 4 = 16 bytes`.
+
+#### What Happens for Each Stream:
+| **Stream** | **Offset** | **Host Array (`h_a`)** | **Device Array (`d_a`)** | **Bytes Transferred** | **Elements Transferred** |
+|------------|------------|------------------------|--------------------------|-----------------------|-------------------------|
+| Stream 0   | `0`        | `h_a[0] - h_a[3]`     | `d_a[0] - d_a[3]`       | 16 bytes              | 4                       |
+| Stream 1   | `4`        | `h_a[4] - h_a[7]`     | `d_a[4] - d_a[7]`       | 16 bytes              | 4                       |
+| Stream 2   | `8`        | `h_a[8] - h_a[11]`    | `d_a[8] - d_a[11]`      | 16 bytes              | 4                       |
+| Stream 3   | `12`       | `h_a[12] - h_a[15]`   | `d_a[12] - d_a[15]`     | 16 bytes              | 4                       |
+
+For each stream:
+- A chunk of 4 elements (`ELEMENTS_PER_STREAM`) starting at `offset = i * ELEMENTS_PER_STREAM` is transferred from `h_a` to `d_a`.
+
+---
+
+### **Textual Representation of the Memory Transfer**
+
+Assume:
+- Host Array (`h_a`): `[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15]`
+- Device Array (`d_a`): Initially empty.
+
+#### Transfer in Streams:
+1. **Stream 0**:
+   - Copies: `h_a[0] - h_a[3]` → `d_a[0] - d_a[3]`
+   - Result in `d_a`: `[A0, A1, A2, A3, _, _, _, _, _, _, _, _, _, _, _, _]`
+
+2. **Stream 1**:
+   - Copies: `h_a[4] - h_a[7]` → `d_a[4] - d_a[7]`
+   - Result in `d_a`: `[A0, A1, A2, A3, A4, A5, A6, A7, _, _, _, _, _, _, _, _]`
+
+3. **Stream 2**:
+   - Copies: `h_a[8] - h_a[11]` → `d_a[8] - d_a[11]`
+   - Result in `d_a`: `[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, _, _, _, _]`
+
+4. **Stream 3**:
+   - Copies: `h_a[12] - h_a[15]` → `d_a[12] - d_a[15]`
+   - Result in `d_a`: `[A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15]`
+
+---
+
+### **Key Points**
+1. **Partitioning:**
+   - Each stream processes exactly `ELEMENTS_PER_STREAM` elements.
+2. **Non-Overlapping Chunks:**
+   - The `offset` ensures that there is no overlap between streams; each operates on a unique chunk of the arrays.
+3. **Scalability:**
+   - By increasing `NUM_STREAMS`, you can divide the workload further, provided the GPU supports additional concurrent streams.
+
+This strategy allows for efficient utilization of the GPU by enabling concurrent memory transfers and computations across multiple streams. Let me know if you'd like further clarification!
