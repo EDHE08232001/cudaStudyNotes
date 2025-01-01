@@ -824,6 +824,7 @@ __shfl_x(mask, variable, source_lane_id, width);
   - The number of threads participating in the shuffle operation.
   - Default width for a warp is `32`.
       * The variable width can be set to any power of 2 between 2 and 32 inclusively
+      * `shuffleID = threadIdx.x % width`
 
 ---
 
