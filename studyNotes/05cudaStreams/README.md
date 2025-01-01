@@ -509,3 +509,198 @@ Implicit synchronization occurs **automatically as a side effect** of certain CU
 3. For optimal performance, combine **non-blocking streams**, **asynchronous operations**, and **minimal synchronization** wherever possible.
 
 -----
+
+# **CUDA Events and Timing with CUDA Events**
+
+CUDA events are powerful tools for **synchronization** and **performance measurement** in CUDA applications. They allow you to mark specific points in the execution flow and monitor the progress of device tasks.
+
+---
+
+## **What is a CUDA Event?**
+
+A **CUDA event** is a marker in a CUDA stream that represents a point in the execution timeline of operations in that stream. Events are used for:
+1. **Synchronization**: Coordinate tasks across multiple streams or between the host and device.
+2. **Progress Monitoring**: Check the status of tasks in a stream.
+3. **Performance Measurement**: Accurately measure the execution time of CUDA operations.
+
+---
+
+## **Key Properties of CUDA Events**
+
+1. **Stream Association**:
+   - An event recorded in a stream will be considered "satisfied" only after all preceding operations in that stream are complete.
+
+2. **Default Stream Behavior**:
+   - Events recorded on the **NULL (default) stream** are applied globally, meaning they synchronize with all streams in the same CUDA context.
+
+3. **Blocking vs. Non-Blocking**:
+   - Events can either block the host thread (`cudaEventSynchronize`) or allow non-blocking checks (`cudaEventQuery`).
+
+---
+
+## **CUDA Event API**
+
+### 1. **Event Creation**
+   - Create an event using `cudaEventCreate`:
+     ```cpp
+     cudaEvent_t event;
+     cudaEventCreate(&event);
+     ```
+   - Events can also be created with flags to modify their behavior:
+     - `cudaEventDefault`: Default event behavior.
+     - `cudaEventBlockingSync`: Synchronizes the host thread when the event is queried or waited upon.
+     - `cudaEventDisableTiming`: Creates an event without timing capabilities, useful for pure synchronization.
+
+### 2. **Event Recording**
+   - Record an event in a specific stream using `cudaEventRecord`:
+     ```cpp
+     cudaEventRecord(event, stream);
+     ```
+   - The event is added to the execution queue of the specified stream.
+
+### 3. **Event Synchronization**
+   - Block the host thread until the event is completed:
+     ```cpp
+     cudaEventSynchronize(event);
+     ```
+
+### 4. **Event Query**
+   - Check if an event has completed without blocking the host:
+     ```cpp
+     cudaError_t status = cudaEventQuery(event);
+     if (status == cudaSuccess) {
+         // Event has completed
+     } else {
+         // Event is not yet complete
+     }
+     ```
+
+### 5. **Event Timing**
+   - Measure the elapsed time between two events using `cudaEventElapsedTime`:
+     ```cpp
+     float milliseconds = 0;
+     cudaEventElapsedTime(&milliseconds, startEvent, stopEvent);
+     ```
+   - This measures the time (in milliseconds) between when `startEvent` and `stopEvent` were recorded.
+
+### 6. **Event Destruction**
+   - Free the resources associated with an event:
+     ```cpp
+     cudaEventDestroy(event);
+     ```
+
+---
+
+## **Example: Using CUDA Events for Timing**
+
+Here’s a simple example demonstrating how to use CUDA events for timing a kernel execution:
+
+```cpp
+#include <stdio.h>
+#include <cuda_runtime.h>
+
+// Simple kernel
+__global__ void simpleKernel(float *arr, int N) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < N) {
+        arr[idx] = idx * 2.0f;
+    }
+}
+
+int main() {
+    const int N = 1 << 20; // Number of elements
+    const int SIZE = N * sizeof(float);
+
+    // Host and device arrays
+    float *h_array, *d_array;
+    cudaMallocHost(&h_array, SIZE); // Pinned memory for host
+    cudaMalloc(&d_array, SIZE);    // Device memory
+
+    // Initialize host array
+    for (int i = 0; i < N; i++) {
+        h_array[i] = 0.0f;
+    }
+
+    // Create events
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    // Start recording the timing
+    cudaEventRecord(start, 0); // Record start event in the default stream
+
+    // Copy data to device
+    cudaMemcpy(d_array, h_array, SIZE, cudaMemcpyHostToDevice);
+
+    // Launch the kernel
+    dim3 block(256);
+    dim3 grid((N + block.x - 1) / block.x);
+    simpleKernel<<<grid, block>>>(d_array, N);
+
+    // Copy data back to host
+    cudaMemcpy(h_array, d_array, SIZE, cudaMemcpyDeviceToHost);
+
+    // Stop recording the timing
+    cudaEventRecord(stop, 0); // Record stop event in the default stream
+
+    // Synchronize to ensure all operations are complete
+    cudaEventSynchronize(stop);
+
+    // Calculate elapsed time
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+
+    // Print the elapsed time
+    printf("Elapsed time: %.2f ms\n", milliseconds);
+
+    // Cleanup
+    cudaFree(d_array);
+    cudaFreeHost(h_array);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+    return 0;
+}
+```
+
+---
+
+## **Key Points in Example**
+
+1. **Events for Timing**:
+   - `start` and `stop` events are recorded before and after the CUDA operations.
+   - `cudaEventElapsedTime` measures the time between the two events.
+
+2. **Synchronization**:
+   - `cudaEventSynchronize(stop)` ensures all operations are completed before measuring the time.
+
+3. **Accuracy**:
+   - The timing is accurate to the level of individual CUDA operations in the same stream.
+
+---
+
+## **Use Cases of CUDA Events**
+
+1. **Synchronization**:
+   - Coordinate tasks across multiple streams using `cudaEventSynchronize` or `cudaStreamWaitEvent`.
+
+2. **Performance Measurement**:
+   - Accurately measure execution times of kernels, memory transfers, or any CUDA operations.
+
+3. **Debugging**:
+   - Use `cudaEventQuery` to monitor the progress of operations in a stream without blocking the host.
+
+---
+
+## **Best Practices**
+
+1. **Use Events for Timing**:
+   - Prefer `cudaEventElapsedTime` for measuring GPU timings instead of host-side timing functions, as it provides more accurate results.
+
+2. **Avoid Excessive Synchronization**:
+   - Synchronizing too frequently (e.g., `cudaEventSynchronize` after every operation) can harm performance by reducing concurrency.
+
+3. **Use Non-Timing Events for Pure Synchronization**:
+   - Create events with `cudaEventDisableTiming` for synchronization-only purposes to reduce overhead.
+
+-----
