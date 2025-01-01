@@ -268,6 +268,101 @@ By overlapping these operations, the GPU can process tasks more efficiently, lea
 
 -----
 
-# Overlapping Memory Transfer and Kernel Execution
+# **Overlapping Memory Transfer and Kernel Execution**
 
-See the folder `cudaMemKerAsyncDemo` in `codeDemo`
+In CUDA programming, overlapping memory transfer and kernel execution is a crucial optimization technique to improve GPU utilization. By dividing tasks among streams and leveraging asynchronous operations, you can achieve concurrency between data movement and computation.
+
+For a practical demonstration, refer to the folder `cudaMemKerAsyncDemo` in `codeDemo`.
+
+---
+
+# **Stream Synchronization and Blocking Behaviors of the NULL Stream**
+
+---
+
+## **Blocking Behavior of the NULL Stream**
+
+The **NULL stream** is an implicit stream in CUDA. It has a **blocking behavior** that affects how operations in other streams execute:
+
+- **Non-NULL Streams:**
+  - While non-NULL streams are generally **non-blocking** with respect to the host, operations in non-NULL streams can be **blocked by the NULL stream**.
+
+- **NULL Stream Behavior:**
+  - The NULL stream synchronizes with all **blocking streams** in the same CUDA context.
+  - When an operation is issued to the NULL stream, the CUDA context **waits for all operations previously issued to blocking streams** to complete before executing the NULL stream operation.
+
+---
+
+### **Types of Non-NULL Streams**
+CUDA streams can be categorized into two types based on their synchronization behavior:
+
+1. **Blocking Streams**:
+   - Operations in a blocking stream can be delayed by the NULL stream.
+   - **Streams created with `cudaStreamCreate()` are blocking streams by default.**
+
+2. **Non-Blocking Streams**:
+   - Operations in a non-blocking stream do not synchronize with the NULL stream.
+   - Non-blocking streams can operate independently of the NULL stream.
+
+---
+
+## **Creating Non-Blocking Streams**
+
+To create non-blocking streams, CUDA provides the following API:
+
+```c
+cudaStreamCreateWithFlags(
+   cudaStream_t* pStream,
+   unsigned int flags
+);
+```
+
+### **Flags:**
+- `cudaStreamDefault`:
+  - Default behavior for streams.
+  - Creates a **blocking stream**.
+- `cudaStreamNonBlocking`:
+  - Creates a **non-blocking stream** that operates independently of the NULL stream.
+
+### **Example:**
+```cpp
+cudaStream_t stream1, stream2;
+
+// Create a blocking stream
+cudaStreamCreate(&stream1);  // Equivalent to cudaStreamCreateWithFlags(&stream1, cudaStreamDefault);
+
+// Create a non-blocking stream
+cudaStreamCreateWithFlags(&stream2, cudaStreamNonBlocking);
+```
+
+---
+
+### **Why Non-Blocking Streams Are Useful**
+Non-blocking streams allow you to:
+1. Achieve **concurrent execution** without being affected by the NULL stream's synchronization.
+2. Enable fine-grained control over execution dependencies in complex workloads.
+
+---
+
+### **NULL Stream Synchronization Diagram**
+
+The diagram below illustrates how the NULL stream synchronizes with blocking streams:
+
+```
+Time --->
+
+NULL Stream:  [---------Op1---------]   [---Op3---]
+Blocking Stream 1:  [---Op2---]              [---Op4---]
+
+Op1 in the NULL stream must complete before Op2 in Blocking Stream 1 starts.
+Op3 in the NULL stream waits for Op4 in Blocking Stream 1 to finish.
+```
+
+---
+
+### **Key Notes:**
+- Operations in non-blocking streams are **not synchronized** with the NULL stream and can execute concurrently.
+- Use `cudaStreamNonBlocking` to create independent streams for better concurrency.
+- The default behavior of `cudaStreamCreate()` creates streams that are synchronized with the NULL stream.
+
+-----
