@@ -226,9 +226,10 @@ Stream 3:
    offset = i * ELEMENTS_PER_STREAM;
    ```
 
----
+-----
 
-### **How Offset Works in Code**
+# **How Offset Works in Code**
+
 ```cpp
 for (int i = 0; i < NUM_STREAMS; i++) {
     offset = i * ELEMENTS_PER_STREAM; // Calculate the starting index for this stream
@@ -253,6 +254,7 @@ for (int i = 0; i < NUM_STREAMS; i++) {
 - **Concurrent Execution:** Enables multiple streams to work on separate chunks concurrently.
 
 ---
+
 ## How this Copy Work?
 
 ```cpp
