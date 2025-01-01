@@ -196,6 +196,17 @@ For an implementation example, refer to **`cudaStreamDemo.cu`**.
 ## **Example Workflow with Streams**
 Here’s a simple breakdown of how to use streams effectively:
 
+**Preparation:** Check concurrent kernel execution eligibility
+```c
+int dev = 0;
+cudaDeviceProp deviceProp;
+cudaGetDeviceProperties(&deviceProp, dev);
+
+if (devicePro.concurrentKernels == 0) {
+    printf("Eligible");
+}
+```
+
 1. **Initialize Streams**:
    ```cpp
    cudaStream_t stream1, stream2;
