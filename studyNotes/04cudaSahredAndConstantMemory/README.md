@@ -826,6 +826,20 @@ __shfl_x(mask, variable, source_lane_id, width);
       * The variable width can be set to any power of 2 between 2 and 32 inclusively
       * `shuffleID = threadIdx.x % width`
 
+```cpp
+#define ARRAY_SIZE 32
+#define FULL_MASK 0xff
+
+__global__ void shfl_boradcast_32_demo(int* in, int* out) {
+   int x = in[threadIdx.x];
+
+   /*
+   All the threads will receive the x value of thread 3 and store it in the register y
+   */
+   int y = __shfl_sync(FULL_MASK, x, 3, 32);
+}
+```
+
 ---
 
 ## **Examples**
