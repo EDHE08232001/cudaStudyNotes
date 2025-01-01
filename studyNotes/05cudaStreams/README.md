@@ -95,3 +95,20 @@ Kernel Execution 2 (Stream 2)                     ---------------------
 ```
 
 Commands in **different streams** can execute concurrently, reducing bottlenecks and optimizing overall performance.
+
+-----
+
+# Asynchronous Functions
+
+To transfer data asynchronously, use
+```c
+cudaMemCpyAsync(
+    destination_pointer,            <- This should be Pinned Memory
+    source_pointer,
+    size,
+    memory_copy_direction,
+    stream
+);
+```
+
+**Note:** To perform asynchronous memeory transfers, CUDA run time need the gurantee that the operating system will not move the virtual memory that belongs to the memory being copied in the middle of the memory transfer operation. Therefore, we have to use pinned memory with the above function. If we used unpinned memory, then this memory transfer will be a synchronous one which block the host execution. 
