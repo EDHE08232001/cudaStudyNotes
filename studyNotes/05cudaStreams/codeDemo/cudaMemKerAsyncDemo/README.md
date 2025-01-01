@@ -103,13 +103,7 @@ This code demonstrates the concept of **CUDA streams** and their ability to enab
 ### **Steps:**
 1. Clone the repository or save the files.
 2. Compile the program using the NVIDIA CUDA Compiler (`nvcc`):
-   ```bash
-   nvcc -o cuda_stream_demo cuda_stream_demo.cu
-   ```
 3. Run the executable:
-   ```bash
-   ./cuda_stream_demo
-   ```
 
 ### **Expected Output:**
 - The program will print "All results match!" if the GPU computation is correct.
