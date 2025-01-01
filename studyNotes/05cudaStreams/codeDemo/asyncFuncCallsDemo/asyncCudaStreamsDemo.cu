@@ -97,7 +97,18 @@ int main(int argc, char** argv) {
     cudaStreamSynchronize(cuda_stream2);
     cudaStreamDestroy(cuda_stream2);
 
-    // Reset the device to clean up all allocations
+    // Cleanup: Free all allocated memory
+    cudaFree(d_in);
+    cudaFree(d_out);
+    cudaFree(d_in2);
+    cudaFree(d_out2);
+
+    cudaFreeHost(h_in);
+    cudaFreeHost(h_ref);
+    cudaFreeHost(h_in2);
+    cudaFreeHost(h_ref2);
+
+    // Reset the device to clean up GPU resources
     cudaDeviceReset();
 
     return 0;
