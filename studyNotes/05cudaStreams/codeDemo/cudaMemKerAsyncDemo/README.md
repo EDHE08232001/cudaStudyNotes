@@ -128,3 +128,126 @@ This code demonstrates the concept of **CUDA streams** and their ability to enab
   - Use CUDA events to measure the time taken for GPU computations.
 - **Increase Problem Size:**
   - Increase `size` to observe how CUDA streams scale with larger workloads.
+
+-----
+
+# Understanding the Offset in CUDA Streams
+
+The **offset** in this program is used to partition the workload across multiple streams. Each stream processes a distinct portion (or chunk) of the arrays, ensuring that the operations do not overlap.
+
+---
+
+### **What is the Offset?**
+The **offset** determines the starting index in the array for each stream's portion of the workload. It ensures that:
+1. Each stream operates on a separate chunk of the array.
+2. Memory transfers and kernel executions are properly partitioned for concurrent processing.
+
+---
+
+### **How Does Offset Work in This Code?**
+
+1. **Total Elements in Array:**
+   - The array contains `size` elements.
+2. **Number of Streams:**
+   - The workload is divided into `NUM_STREAMS` equal parts.
+3. **Elements Per Stream:**
+   - Each stream processes `ELEMENTS_PER_STREAM = size / NUM_STREAMS`.
+4. **Offset for Each Stream:**
+   - For stream `i`, the starting index is:
+     ```cpp
+     offset = i * ELEMENTS_PER_STREAM;
+     ```
+   - This ensures that stream `i` works on indices `[offset, offset + ELEMENTS_PER_STREAM)`.
+
+---
+
+### **Example: Visualizing Offset**
+
+Suppose:
+- `size = 16` (16 elements in the array).
+- `NUM_STREAMS = 4` (4 streams).
+- `ELEMENTS_PER_STREAM = size / NUM_STREAMS = 4`.
+
+#### **Workload Partitioning with Offset**
+| **Stream** | **Offset** | **Indices Processed** | **Array Elements**        |
+|------------|------------|-----------------------|---------------------------|
+| Stream 0   | `0`        | `[0, 1, 2, 3]`       | `A[0] A[1] A[2] A[3]`     |
+| Stream 1   | `4`        | `[4, 5, 6, 7]`       | `A[4] A[5] A[6] A[7]`     |
+| Stream 2   | `8`        | `[8, 9, 10, 11]`     | `A[8] A[9] A[10] A[11]`   |
+| Stream 3   | `12`       | `[12, 13, 14, 15]`   | `A[12] A[13] A[14] A[15]` |
+
+Each stream processes its own chunk independently.
+
+---
+
+### **Diagram Representation**
+Below is a textual representation of how the array is divided and processed by the streams:
+
+```
+Array A (Host Memory): [A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15]
+
+Stream 0:
+  - Offset: 0
+  - Indices: [0, 1, 2, 3]
+  - Elements: [A0, A1, A2, A3]
+  - Operations: Transfer Host → Device, Kernel Execution, Transfer Device → Host
+
+Stream 1:
+  - Offset: 4
+  - Indices: [4, 5, 6, 7]
+  - Elements: [A4, A5, A6, A7]
+  - Operations: Transfer Host → Device, Kernel Execution, Transfer Device → Host
+
+Stream 2:
+  - Offset: 8
+  - Indices: [8, 9, 10, 11]
+  - Elements: [A8, A9, A10, A11]
+  - Operations: Transfer Host → Device, Kernel Execution, Transfer Device → Host
+
+Stream 3:
+  - Offset: 12
+  - Indices: [12, 13, 14, 15]
+  - Elements: [A12, A13, A14, A15]
+  - Operations: Transfer Host → Device, Kernel Execution, Transfer Device → Host
+```
+
+---
+
+### **Key Insights**
+1. **Independent Chunks:**  
+   Each stream operates on a non-overlapping section of the array. This independence ensures that memory transfers and computations can happen concurrently.
+
+2. **Concurrent Execution:**  
+   Streams execute their respective tasks (memory transfers, kernel execution) at the same time, provided the GPU has sufficient resources.
+
+3. **Offset Calculation:**  
+   The offset is a simple way to divide the workload:
+   ```cpp
+   offset = i * ELEMENTS_PER_STREAM;
+   ```
+
+---
+
+### **How Offset Works in Code**
+```cpp
+for (int i = 0; i < NUM_STREAMS; i++) {
+    offset = i * ELEMENTS_PER_STREAM; // Calculate the starting index for this stream
+
+    // Asynchronous memory transfers
+    cudaMemcpyAsync(&d_a[offset], &h_a[offset], BYTES_PER_STREAM, cudaMemcpyHostToDevice, streams[i]);
+    cudaMemcpyAsync(&d_b[offset], &h_b[offset], BYTES_PER_STREAM, cudaMemcpyHostToDevice, streams[i]);
+
+    // Kernel execution
+    sum_array_overlap<<<grid, block, 0, streams[i]>>>(&d_a[offset], &d_b[offset], &d_c[offset], ELEMENTS_PER_STREAM);
+
+    // Asynchronous memory transfer back to host
+    cudaMemcpyAsync(&gpu_result[offset], &d_c[offset], BYTES_PER_STREAM, cudaMemcpyDeviceToHost, streams[i]);
+}
+```
+
+---
+
+### **Benefits of Using Offset**
+- **Partitioning:** Simplifies dividing the workload among multiple streams.
+- **Scalability:** Easy to adjust for larger arrays or more streams.
+- **Concurrent Execution:** Enables multiple streams to work on separate chunks concurrently.
