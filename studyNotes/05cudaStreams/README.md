@@ -899,6 +899,185 @@ h_array[9] = 2
 
 -----
 
+# **Study Notes: Implementing Inter-Stream Dependencies with `cudaStreamWaitEvent`**
+
+---
+
+### **Goal**
+To implement a CUDA program where:
+- **Stream 1** executes a kernel while **Stream 2** loads memory to the device.
+- **Stream 2** executes a kernel while **Stream 1** transfers memory back to the host.
+- This alternating pattern continues with synchronization between streams.
+
+---
+
+### **Key Concept: Inter-Stream Dependencies**
+Inter-stream dependencies allow streams to coordinate their operations by introducing a dependency between them. This is achieved using:
+1. **CUDA Events**: Mark specific points in a stream’s execution.
+2. **`cudaStreamWaitEvent`**: Makes one stream wait for an event recorded in another stream.
+
+---
+
+### **Steps to Implement Alternating Operations with Dependencies**
+
+#### **1. Initialize Streams and Events**
+- Create two CUDA streams (`stream1` and `stream2`) for the alternating operations.
+- Create two CUDA events (`event1` and `event2`) to manage synchronization between streams.
+
+```cpp
+cudaStream_t stream1, stream2;
+cudaEvent_t event1, event2;
+
+cudaStreamCreate(&stream1);
+cudaStreamCreate(&stream2);
+
+cudaEventCreateWithFlags(&event1, cudaEventDefault); // Default event for Stream 1
+cudaEventCreateWithFlags(&event2, cudaEventDefault); // Default event for Stream 2
+```
+
+---
+
+#### **2. Workflow Overview**
+
+The operations alternate as follows:
+1. **Stream 1**:
+   - Load memory to the device.
+   - Execute a kernel.
+   - Transfer results back to the host.
+   - Record an event (`event1`) after kernel execution.
+
+2. **Stream 2**:
+   - Wait for `event1` (to ensure Stream 1's kernel has started).
+   - Load memory to the device.
+   - Execute a kernel.
+   - Transfer results back to the host.
+   - Record an event (`event2`) after kernel execution.
+
+3. **Stream 1**:
+   - Wait for `event2` before starting its next operation.
+
+---
+
+#### **3. Alternating Workflow Implementation**
+
+```cpp
+for (int iteration = 0; iteration < NUM_ITERATIONS; iteration++) {
+    // Stream 1: Load memory, execute kernel, and transfer results back
+    cudaMemcpyAsync(d_data1, h_data1, SIZE, cudaMemcpyHostToDevice, stream1);
+    computeKernel<<<grid, block, 0, stream1>>>(d_data1, N, 1.0f);
+    cudaMemcpyAsync(h_data1, d_data1, SIZE, cudaMemcpyDeviceToHost, stream1);
+
+    // Record an event in Stream 1
+    cudaEventRecord(event1, stream1);
+
+    // Stream 2: Wait for Stream 1, then load memory, execute kernel, and transfer results back
+    cudaStreamWaitEvent(stream2, event1, 0); // Stream 2 waits for Stream 1's event
+    cudaMemcpyAsync(d_data2, h_data2, SIZE, cudaMemcpyHostToDevice, stream2);
+    computeKernel<<<grid, block, 0, stream2>>>(d_data2, N, 2.0f);
+    cudaMemcpyAsync(h_data2, d_data2, SIZE, cudaMemcpyDeviceToHost, stream2);
+
+    // Record an event in Stream 2
+    cudaEventRecord(event2, stream2);
+
+    // Stream 1 waits for Stream 2 before the next iteration
+    cudaStreamWaitEvent(stream1, event2, 0);
+}
+```
+
+---
+
+### **How to Use `cudaStreamWaitEvent`**
+
+#### **Function Signature**
+```cpp
+cudaError_t cudaStreamWaitEvent(cudaStream_t stream, cudaEvent_t event, unsigned int flags);
+```
+
+#### **Parameters**
+1. **`stream`**:
+   - The stream that will wait for the event.
+   - Example: `stream2` in `cudaStreamWaitEvent(stream2, event1, 0);` makes Stream 2 wait for `event1`.
+   
+2. **`event`**:
+   - The event that the stream waits for.
+   - Example: `event1` marks a synchronization point in Stream 1.
+
+3. **`flags`**:
+   - Modifier flags for behavior customization.
+   - Currently, only `0` is valid, indicating default behavior.
+
+---
+
+#### **Usage Example**
+
+1. **Record an Event in Stream 1**:
+   ```cpp
+   cudaEventRecord(event1, stream1);
+   ```
+
+2. **Make Stream 2 Wait for Event 1**:
+   ```cpp
+   cudaStreamWaitEvent(stream2, event1, 0);
+   ```
+
+3. **Stream 2 Proceeds After Event 1**:
+   - Once all operations in Stream 1 prior to `event1` are complete, Stream 2 continues its execution.
+
+---
+
+### **Diagram of Workflow**
+
+```
+Time --->
+
+Stream 1: [Load Data] ---> [Kernel Execution] ---> [Transfer Back] ---> [Event 1 Recorded]
+                                   |
+                                   | Stream 2 waits for Event 1
+                                   v
+Stream 2:       [Load Data] ---> [Kernel Execution] ---> [Transfer Back] ---> [Event 2 Recorded]
+                                   |
+                                   | Stream 1 waits for Event 2
+                                   v
+Stream 1: [Next Load Data] ---> ...
+```
+
+---
+
+### **Key Points to Remember**
+
+1. **Why Use Events?**
+   - Events allow precise synchronization between streams without introducing unnecessary global synchronization (like `cudaDeviceSynchronize`).
+
+2. **Alternating Workflow Benefits**:
+   - Efficiently utilizes the GPU by overlapping memory transfers and kernel execution.
+   - Avoids idle time in streams, maximizing performance.
+
+3. **Default Behavior of `cudaStreamWaitEvent`**:
+   - Passing `0` as the flag ensures standard waiting behavior.
+
+4. **Scalability**:
+   - This technique can be extended to more streams or more complex workflows.
+
+---
+
+### **Best Practices**
+
+1. **Use Events Strategically**:
+   - Record events only where necessary to minimize overhead.
+   - Use `cudaEventDisableTiming` if timing is not required.
+
+2. **Overlap Operations**:
+   - Design your workflow to maximize overlapping between streams.
+
+3. **Avoid Excessive Dependencies**:
+   - Overusing `cudaStreamWaitEvent` may serialize execution unnecessarily, reducing concurrency.
+
+---
+
+This structured note explains the alternating workflow implementation and usage of `cudaStreamWaitEvent` in an easy-to-understand manner. Let me know if further clarification or additional examples are needed!
+
+-----
+
 # **CUDA Concepts and Techniques Summary**
 
 ---
