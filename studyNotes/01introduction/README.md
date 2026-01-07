@@ -2,7 +2,7 @@
 ```cpp
 #include <iostream>
 
-// __global tells the computher to execute the function in gpu
+// __global__ tells the computher to execute the function in gpu
 // and such function are called kernels
 __global__ void add(int* a, int* b, int* c) {
     /*
